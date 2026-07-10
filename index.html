@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CME WATCH // NASA DONKI Space Weather Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Michroma&family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="scanlines"></div>
+<div class="noise"></div>
+
+<div class="crt-wrap">
+
+  <!-- HEADER -->
+  <header class="topbar">
+    <div class="topbar__brand">
+      <div class="brand-mark">☉</div>
+      <div class="brand-text">
+        <h1>CME <span>WATCH</span></h1>
+        <p class="brand-sub">DONKI CORONAL MASS EJECTION TRACKER // NASA OPEN DATA</p>
+      </div>
+    </div>
+    <div class="topbar__status">
+      <div class="status-led" id="statusLed"><span class="dot"></span><span id="statusText">STANDBY</span></div>
+      <div class="clock" id="clock">--:--:--</div>
+    </div>
+  </header>
+
+  <!-- CONTROL DECK -->
+  <section class="control-deck">
+    <div class="field">
+      <label for="startDate">RANGE START</label>
+      <input type="date" id="startDate">
+    </div>
+    <div class="field">
+      <label for="endDate">RANGE END</label>
+      <input type="date" id="endDate">
+    </div>
+    <div class="field field--key">
+      <label for="apiKey">NASA API KEY <span class="opt">(opcional — usa DEMO_KEY)</span></label>
+      <input type="text" id="apiKey" placeholder="DEMO_KEY">
+    </div>
+    <div class="field field--action">
+      <button id="fetchBtn" class="btn-fetch">
+        <span class="btn-fetch__label">EXECUTAR SCAN</span>
+        <span class="btn-fetch__arrow">›</span>
+      </button>
+    </div>
+    <div class="quick-ranges">
+      <button class="chip" data-range="7">7D</button>
+      <button class="chip" data-range="30">30D</button>
+      <button class="chip" data-range="90">90D</button>
+      <button class="chip" data-range="365">1A</button>
+    </div>
+  </section>
+
+  <!-- ALERT / ERROR BAR -->
+  <div class="alert-bar" id="alertBar" hidden></div>
+
+  <!-- STATS -->
+  <section class="stats-grid" id="statsGrid">
+    <div class="stat-card">
+      <span class="stat-label">EVENTOS DETECTADOS</span>
+      <span class="stat-value" id="statTotal">—</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">VELOCIDADE MÉDIA</span>
+      <span class="stat-value" id="statAvgSpeed">—<small>km/s</small></span>
+    </div>
+    <div class="stat-card stat-card--danger">
+      <span class="stat-label">EVENTO MAIS RÁPIDO</span>
+      <span class="stat-value" id="statMaxSpeed">—<small>km/s</small></span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">EARTH-DIRECTED</span>
+      <span class="stat-value" id="statEarthDirected">—</span>
+    </div>
+  </section>
+
+  <!-- MAIN GRID -->
+  <main class="main-grid">
+
+    <!-- CHART PANEL -->
+    <section class="panel panel--chart">
+      <div class="panel__head">
+        <h2>PERFIL DE VELOCIDADE <span class="tag">km/s ao longo do tempo</span></h2>
+      </div>
+      <div class="panel__body">
+        <canvas id="speedChart" width="900" height="280"></canvas>
+        <div class="chart-empty" id="chartEmpty">Execute um scan para visualizar os dados</div>
+      </div>
+    </section>
+
+    <!-- EVENT LIST PANEL -->
+    <section class="panel panel--list">
+      <div class="panel__head">
+        <h2>LOG DE EVENTOS <span class="tag" id="listCount">0 registros</span></h2>
+        <div class="sort-controls">
+          <button class="sort-btn active" data-sort="date">DATA</button>
+          <button class="sort-btn" data-sort="speed">VELOCIDADE</button>
+        </div>
+      </div>
+      <div class="panel__body event-list" id="eventList">
+        <div class="empty-state">
+          <div class="empty-state__icon">◌</div>
+          <p>Nenhum dado carregado ainda.<br>Selecione um intervalo e clique em EXECUTAR SCAN.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <p>Fonte de dados: NASA DONKI API (Database Of Notifications, Knowledge, Information) — <span>api.nasa.gov</span></p>
+  </footer>
+
+</div>
+
+<!-- DETAIL MODAL -->
+<div class="modal-overlay" id="modalOverlay" hidden>
+  <div class="modal">
+    <button class="modal__close" id="modalClose">✕</button>
+    <div class="modal__header">
+      <span class="modal__badge" id="modalBadge">CME</span>
+      <h3 id="modalTitle">—</h3>
+    </div>
+    <div class="modal__body" id="modalBody"></div>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
