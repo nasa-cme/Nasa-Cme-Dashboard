@@ -471,6 +471,10 @@ body {
   padding: 24px;
   animation: fade-in 0.15s ease;
 }
+
+.modal-overlay[hidden] {
+  display: none;
+}
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 
 .modal {
