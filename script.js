@@ -301,7 +301,13 @@
       ${e.note ? `<div class="modal__note">${escapeHtml(e.note)}</div>` : ''}
     `;
 
+    els.modalOverlay.style.display = 'flex';
     els.modalOverlay.hidden = false;
+  }
+
+  function closeModal() {
+    els.modalOverlay.style.display = 'none';
+    els.modalOverlay.hidden = true;
   }
 
   function escapeHtml(str) {
@@ -310,12 +316,12 @@
     return div.innerHTML;
   }
 
-  els.modalClose.addEventListener('click', () => { els.modalOverlay.hidden = true; });
+  els.modalClose.addEventListener('click', closeModal);
   els.modalOverlay.addEventListener('click', (e) => {
-    if (e.target === els.modalOverlay) els.modalOverlay.hidden = true;
+    if (e.target === els.modalOverlay) closeModal();
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') els.modalOverlay.hidden = true;
+    if (e.key === 'Escape' && !els.modalOverlay.hidden) closeModal();
   });
 
   /* ------------------------------------------------------------------ */
