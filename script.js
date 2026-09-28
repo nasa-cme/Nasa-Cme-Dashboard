@@ -123,7 +123,9 @@
     const startISO = `${start}T00:00:00`;
     const endISO = `${end}T23:59:59`;
 
-    const url = `${SUPABASE_ENDPOINT}/cme_events?start_time=gte.${encodeURIComponent(startISO)}&start_time=lte.${encodeURIComponent(endISO)}&order=start_time.desc&limit=1000`;
+    // Usar sintaxe PostgREST para combinar filtros de data
+    const dateFilter = `and=(start_time.gte.${encodeURIComponent(startISO)},start_time.lte.${encodeURIComponent(endISO)})`;
+    const url = `${SUPABASE_ENDPOINT}/cme_events?${dateFilter}&order=start_time.desc&limit=1000`;
 
     try {
       const res = await fetch(url, {

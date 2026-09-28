@@ -19,7 +19,6 @@ CREATE TABLE IF NOT EXISTS cme_events (
     half_angle NUMERIC,
     link TEXT,
     linked_events JSONB DEFAULT '[]'::jsonb,
-    record_hash TEXT UNIQUE NOT NULL,
     fetched_at TIMESTAMPTZ DEFAULT NOW(),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()

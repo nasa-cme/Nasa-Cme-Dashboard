@@ -20,7 +20,8 @@
 </p>
 
 <p align="center">
-  <a href="https://nasa-cme.github.io/Nasa-Cme-Dashboard/">
+  <!-- Substitua pela URL do GitHub Pages após publicar -->
+  <a href="https://SEU-USUARIO.github.io/DONKI-CME/">
     <img src="https://img.shields.io/badge/GitHub%20Pages-Live-blue?style=for-the-badge" alt="Live Demo">
   </a>
   <a href="https://github.com/SN-2026-GRUPO-03-NASA/DONKI-CME">
@@ -180,6 +181,16 @@ python -m http.server 8000
 2. Go to **SQL Editor** and execute the contents of `sql/setup.sql`
 3. Note your project URL and keys from **Settings → API**
 
+### Migração para bancos existentes
+
+Se o banco já foi criado com a coluna `record_hash`, execute esta migração para removê-la:
+
+```sql
+-- Remover constraint e coluna record_hash (se existirem)
+ALTER TABLE cme_events DROP CONSTRAINT IF EXISTS cme_events_record_hash_key;
+ALTER TABLE cme_events DROP COLUMN IF EXISTS record_hash;
+```
+
 ## 2. GitHub Secrets
 
 Add the following secrets to your repository (Settings → Secrets and variables → Actions):
@@ -192,12 +203,14 @@ Add the following secrets to your repository (Settings → Secrets and variables
 
 ## 3. Frontend Configuration
 
-Edit `script.js` and update the Supabase configuration:
+A configuração do Supabase já está feita em `script.js`. Os valores públicos (URL e chave `anon`) estão definidos no início do arquivo:
 
 ```javascript
-const SUPABASE_URL = 'https://YOUR_PROJECT.supabase.co';
-const SUPABASE_ANON_KEY = 'YOUR_ANON_KEY';
+const SUPABASE_URL = 'https://SEU_PROJETO.supabase.co';
+const SUPABASE_ANON_KEY = 'SUA_CHAVE_ANON_PUBLICA';
 ```
+
+**Importante:** Nunca inclua a chave `service_role` ou qualquer chave privada no frontend.
 
 ## 4. GitHub Pages
 
@@ -213,7 +226,8 @@ const SUPABASE_ANON_KEY = 'YOUR_ANON_KEY';
 Deployed on **GitHub Pages**. Any push to `main` is reflected immediately.
 
 ```
-https://SN-2026-GRUPO-03-NASA.github.io/DONKI-CME/
+<!-- Substitua pela URL do GitHub Pages após publicar -->
+https://SEU-USUARIO.github.io/DONKI-CME/
 ```
 
 ---

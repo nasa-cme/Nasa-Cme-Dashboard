@@ -24,7 +24,6 @@ import os
 import sys
 import json
 import logging
-import hashlib
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -68,15 +67,19 @@ def get_env_var(name: str, default: str | None = None, required: bool = False) -
     return value or ""
 
 
-def generate_record_hash(activity_id: str | None) -> str:
+def sanitize_error_message(error: Exception) -> str:
     """
-    Gera um hash único para um registro CME baseado na chave natural (activityID).
-    Usado para deduplicação antes do upsert.
+    Remove chaves de API de mensagens de erro antes de registrar.
+    Previne exposição de secrets em logs.
     """
-    if not activity_id:
-        # Fallback para registros sem activityID (não deveria acontecer)
-        return hashlib.sha256(f"unknown_{datetime.now(timezone.utc).isoformat()}".encode()).hexdigest()
-    return hashlib.sha256(activity_id.encode()).hexdigest()
+    message = str(error)
+    # Remover padrões comuns de chaves de API
+    import re
+    # Remover api_key=... ou api_key=***
+    message = re.sub(r'api_key=[^\s&]+', 'api_key=***', message)
+    # Remover tokens JWT (eyJ...)
+    message = re.sub(r'eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+', '***', message)
+    return message
 
 
 def pick_best_analysis(analyses: list[dict] | None) -> dict | None:
@@ -119,7 +122,6 @@ def normalize_event(raw: dict) -> dict:
         "half_angle": analysis.get("halfAngle") if analysis else None,
         "link": raw.get("link") or None,
         "linked_events": [e.get("activityID") for e in (raw.get("linkedEvents") or []) if e and e.get("activityID")],
-        "record_hash": generate_record_hash(activity_id),
         "fetched_at": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -148,7 +150,7 @@ def fetch_nasa_data(
             logger.info(f"API retornou {len(data)} registros.")
             return data
         except requests.exceptions.RequestException as e:
-            logger.warning(f"Tentativa {attempt} falhou: {e}")
+            logger.warning(f"Tentativa {attempt} falhou: {sanitize_error_message(e)}")
             if attempt == MAX_RETRIES:
                 raise
 
@@ -188,7 +190,7 @@ def upsert_batch(supabase: Client, records: list[dict]) -> int:
         ).execute()
         return len(result.data) if result.data else 0
     except Exception as e:
-        logger.error(f"Erro no upsert do lote: {e}")
+        logger.error(f"Erro no upsert do lote: {sanitize_error_message(e)}")
         raise
 
 
@@ -247,8 +249,8 @@ def run_pipeline() -> None:
         supabase = create_client(supabase_url, supabase_key)
         logger.info("Cliente Supabase inicializado com sucesso.")
     except Exception as e:
-        logger.error(f"Falha ao inicializar cliente Supabase: {e}")
-        register_execution(None, 0, 0, 1, STATUS_ERRO_CRITICO, str(e))
+        logger.error(f"Falha ao inicializar cliente Supabase: {sanitize_error_message(e)}")
+        register_execution(None, 0, 0, 1, STATUS_ERRO_CRITICO, sanitize_error_message(e))
         sys.exit(1)
 
     # 3. Definir período de busca (últimos 30 dias por padrão)
@@ -263,8 +265,8 @@ def run_pipeline() -> None:
     try:
         raw_data = fetch_nasa_data(nasa_api_key, start_str, end_str)
     except Exception as e:
-        logger.error(f"Falha crítica ao buscar dados da NASA: {e}")
-        register_execution(supabase, 0, 0, 1, STATUS_ERRO_CRITICO, str(e))
+        logger.error(f"Falha crítica ao buscar dados da NASA: {sanitize_error_message(e)}")
+        register_execution(supabase, 0, 0, 1, STATUS_ERRO_CRITICO, sanitize_error_message(e))
         sys.exit(1)
 
     # 5. Tratar resposta vazia como execução válida

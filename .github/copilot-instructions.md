@@ -30,7 +30,7 @@ O pipeline é executado automaticamente via GitHub Actions (cron diário às 06:
 | Nome | Descrição | Obrigatório |
 |------|-----------|-------------|
 | `SUPABASE_URL` | URL do projeto Supabase | Sim |
-| `SUPABASE_KEY` | Chave de serviço (service_role) do Supabase | Sim |
+| `SUPABASE_SERVICE_KEY` | Chave de serviço (service_role) do Supabase | Sim |
 | `NASA_API_KEY` | Chave da API da NASA (padrão: DEMO_KEY) | Não |
 
 ### Tabelas do Supabase
