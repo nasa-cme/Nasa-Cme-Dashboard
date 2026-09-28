@@ -113,7 +113,7 @@ def normalize_event(raw: dict) -> dict:
         "start_time": raw.get("startTime"),
         "source_location": raw.get("sourceLocation") or None,
         "note": raw.get("note") or None,
-        "instruments": [i.get("displayName") for i in raw.get("instruments", []) if i.get("displayName")],
+        "instruments": [i.get("displayName") for i in (raw.get("instruments") or []) if i.get("displayName")],
         "speed": analysis.get("speed") if analysis else None,
         "type": analysis.get("type") if analysis else None,
         "is_earth_directed": is_earth_directed(analysis),
@@ -121,7 +121,7 @@ def normalize_event(raw: dict) -> dict:
         "longitude": analysis.get("longitude") if analysis else None,
         "half_angle": analysis.get("halfAngle") if analysis else None,
         "link": raw.get("link") or None,
-        "linked_events": [e.get("activityID") for e in raw.get("linkedEvents", []) if e.get("activityID")],
+        "linked_events": [e.get("activityID") for e in (raw.get("linkedEvents") or []) if e and e.get("activityID")],
         "record_hash": generate_record_hash(raw),
         "fetched_at": datetime.now(timezone.utc).isoformat(),
     }
