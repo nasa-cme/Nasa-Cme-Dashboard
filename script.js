@@ -10,8 +10,8 @@
   /* ------------------------------------------------------------------ */
   /* Configuração do Supabase (apenas chave pública anon)                */
   /* ------------------------------------------------------------------ */
-  const SUPABASE_URL = 'https://SEU_PROJETO.supabase.co';
-  const SUPABASE_ANON_KEY = 'SUA_CHAVE_ANON_PUBLICA';
+  const SUPABASE_URL = 'https://zwuhsumveqfhkponajdu.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp3dWhzdW12ZXFmaGtwb25hamR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzODg1MDEsImV4cCI6MjA5ODk2NDUwMX0.fqLul3-B41PmhAlR3vW7jUE24geBGi-mpXruiMscpL4';
 
   const SUPABASE_ENDPOINT = `${SUPABASE_URL}/rest/v1`;
 
