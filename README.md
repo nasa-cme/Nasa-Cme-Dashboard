@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  <a href="https://SN-2026-GRUPO-03-NASA.github.io/DONKI-CME/">
+  <a href="https://nasa-cme.github.io/Nasa-Cme-Dashboard/">
     <img src="https://img.shields.io/badge/GitHub%20Pages-Live-blue?style=for-the-badge" alt="Live Demo">
   </a>
   <a href="https://github.com/SN-2026-GRUPO-03-NASA/DONKI-CME">
