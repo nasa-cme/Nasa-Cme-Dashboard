@@ -20,10 +20,10 @@
 </p>
 
 <p align="center">
-  <a href="https://nasa-cme.github.io/Nasa-Cme-Dashboard/">
+  <a href="https://SN-2026-GRUPO-03-NASA.github.io/DONKI-CME/">
     <img src="https://img.shields.io/badge/GitHub%20Pages-Live-blue?style=for-the-badge" alt="Live Demo">
   </a>
-  <a href="https://github.com/nasa-cme/Nasa-Cme-Dashboard">
+  <a href="https://github.com/SN-2026-GRUPO-03-NASA/DONKI-CME">
     <img src="https://img.shields.io/badge/GitHub-Repository-black?style=for-the-badge" alt="GitHub Repository">
   </a>
 </p>
@@ -39,8 +39,9 @@
 - [Architecture](#architecture)
 - [Project Structure](#project-structure)
 - [Getting Started](#getting-started)
+- [Configuration](#configuration)
 - [Deployment](#deployment)
-- [Known Limitations](#known-limitations)
+- [Documentation](#documentation)
 - [Contributors](#contributors)
 - [License](#license)
 
@@ -50,7 +51,7 @@
 
 CME Watch is a browser-based dashboard for exploring space weather data from NASA's DONKI (Database Of Notifications, Knowledge, Information) API. It fetches Coronal Mass Ejection events for any user-defined date range, calculates statistics such as average velocity and Earth-directed count, and renders an interactive velocity profile chart alongside a sortable event log.
 
-The entire application runs client-side with no build step — just HTML, CSS and JavaScript — deployed on GitHub Pages.
+The application uses a data pipeline architecture: NASA DONKI API → GitHub Actions → Supabase → GitHub Pages.
 
 ---
 
@@ -74,7 +75,6 @@ The entire application runs client-side with no build step — just HTML, CSS an
 
 - NASA DONKI API integration with configurable date range
 - Quick range presets (7D / 30D / 90D / 1A)
-- Custom API key support — falls back to `DEMO_KEY`
 - Stats cards: events detected, average velocity, fastest event, Earth-directed count
 - Velocity profile chart with threshold line (Chart.js)
 - Event log sortable by date or velocity
@@ -82,6 +82,8 @@ The entire application runs client-side with no build step — just HTML, CSS an
 - Status LED and live clock
 - Error/alert bar with HTTP status feedback
 - CRT visual effects (scanlines + noise overlay)
+- Data persistence via Supabase
+- Automated data updates via GitHub Actions
 
 ---
 
@@ -95,6 +97,8 @@ The entire application runs client-side with no build step — just HTML, CSS an
 | Charts | Chart.js |
 | Fonts | Google Fonts (Michroma + JetBrains Mono) |
 | Data Source | NASA DONKI API |
+| Database | Supabase (PostgreSQL) |
+| Backend | GitHub Actions (Python) |
 | Deployment | GitHub Pages |
 | Version Control | Git & GitHub |
 
@@ -103,26 +107,14 @@ The entire application runs client-side with no build step — just HTML, CSS an
 # Architecture
 
 ```text
-User (Browser)
-      │
-      ▼
-GitHub Pages CDN
-      │
-      ▼
-HTML / CSS / JavaScript
-      │
-      ▼
-NASA DONKI REST API
-(api.nasa.gov/DONKI/CME)
-      │
-      ▼
-Client-side processing
-(filter, sort, deduplicate)
-      │
-      ▼
-Chart.js velocity chart
-+ DOM event list
-+ stats cards
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   NASA DONKI    │────▶│  GitHub Actions  │────▶│    Supabase     │────▶│  GitHub Pages   │
+│      API        │     │  (Python Script) │     │   (PostgreSQL)  │     │  (Static Site)  │
+└─────────────────┘     └──────────────────┘     └─────────────────┘     └─────────────────┘
+        │                        │                        │                        │
+        │                        │                        │                        │
+   CME Events              Batch Upsert            cme_events              Browser
+   (JSON)                  (50 records)            execucoes               Dashboard
 ```
 
 ---
@@ -130,11 +122,24 @@ Chart.js velocity chart
 # Project Structure
 
 ```text
-Nasa-Cme-Dashboard/
+DONKI-CME/
 │
-├── index.html    # Application shell, component markup and modal
-├── style.css     # Global styles, CRT effects, layout
-├── script.js     # API integration, chart rendering, event log logic
+├── index.html              # Application shell, component markup and modal
+├── style.css               # Global styles, CRT effects, layout
+├── script.js               # Supabase integration, chart rendering, event log logic
+├── scripts/
+│   └── fetch_nasa.py       # Pipeline de coleta de dados (GitHub Actions)
+├── sql/
+│   └── setup.sql           # Setup inicial do banco de dados Supabase
+├── supabase/
+│   └── migrations/
+│       └── 001_create_tables.sql  # Migração inicial das tabelas
+├── docs/
+│   ├── ai-interaction.md   # Registro de interações com IA
+│   └── reflexao.md         # Reflexões do grupo
+├── .github/
+│   └── workflows/
+│       └── update-data.yml # Workflow de atualização automatizada
 └── README.md
 ```
 
@@ -145,12 +150,14 @@ Nasa-Cme-Dashboard/
 ## Prerequisites
 
 - A modern browser (Chrome, Firefox, Edge, Safari)
+- Node.js (optional, for local server)
+- Python 3.11+ (for running the pipeline locally)
 
 ## Installation
 
 ```bash
-git clone https://github.com/nasa-cme/Nasa-Cme-Dashboard.git
-cd Nasa-Cme-Dashboard
+git clone https://github.com/SN-2026-GRUPO-03-NASA/DONKI-CME.git
+cd DONKI-CME
 ```
 
 Open `index.html` in a browser, or use a local server:
@@ -163,9 +170,41 @@ npx serve .
 python -m http.server 8000
 ```
 
-## NASA API Key
+---
 
-The dashboard defaults to `DEMO_KEY`, which is rate-limited to approximately 30 requests per hour per IP. For unrestricted use, register a free key at [api.nasa.gov](https://api.nasa.gov) and enter it in the **NASA API KEY** field.
+# Configuration
+
+## 1. Supabase Setup
+
+1. Create a new project at [supabase.com](https://supabase.com)
+2. Go to **SQL Editor** and execute the contents of `sql/setup.sql`
+3. Note your project URL and keys from **Settings → API**
+
+## 2. GitHub Secrets
+
+Add the following secrets to your repository (Settings → Secrets and variables → Actions):
+
+| Name | Description |
+|------|-------------|
+| `SUPABASE_URL` | Your Supabase project URL |
+| `SUPABASE_SERVICE_KEY` | Your Supabase service_role key |
+| `NASA_API_KEY` | Your NASA API key (optional, defaults to DEMO_KEY) |
+
+## 3. Frontend Configuration
+
+Edit `script.js` and update the Supabase configuration:
+
+```javascript
+const SUPABASE_URL = 'https://YOUR_PROJECT.supabase.co';
+const SUPABASE_ANON_KEY = 'YOUR_ANON_KEY';
+```
+
+## 4. GitHub Pages
+
+1. Go to **Settings → Pages**
+2. Select **Source: Deploy from a branch**
+3. Choose **main** branch and **/ (root)** folder
+4. Click **Save**
 
 ---
 
@@ -174,8 +213,20 @@ The dashboard defaults to `DEMO_KEY`, which is rate-limited to approximately 30 
 Deployed on **GitHub Pages**. Any push to `main` is reflected immediately.
 
 ```
-https://nasa-cme.github.io/Nasa-Cme-Dashboard/
+https://SN-2026-GRUPO-03-NASA.github.io/DONKI-CME/
 ```
+
+---
+
+# Documentation
+
+- [AI Interaction Log](docs/ai-interaction.md) - Registro de interações com IA
+- [Reflexão do Grupo](docs/reflexao.md) - Reflexões sobre o desenvolvimento
+
+## Pendentes
+
+- `docs/tutorial.pdf` - Tutorial em PDF (a ser produzido)
+- `docs/apresentacao.pdf` - Apresentação em PDF (a ser produzido)
 
 ---
 
@@ -183,7 +234,7 @@ https://nasa-cme.github.io/Nasa-Cme-Dashboard/
 
 - `DEMO_KEY` is rate-limited (~30 req/hour per IP) and may return HTTP 403 under heavy use. Registering a personal key at [api.nasa.gov](https://api.nasa.gov) resolves this.
 - DONKI events are typically published hours after detection, not in real time.
-- No data persistence — results are lost on page reload.
+- Data is updated daily via GitHub Actions cron schedule (06:00 UTC).
 
 ---
 
@@ -193,5 +244,8 @@ https://nasa-cme.github.io/Nasa-Cme-Dashboard/
 |---|---|
 | Murilo de Souza Cândido | [@murilotecoteco](https://github.com/murilotecoteco) |
 
+---
 
+# License
 
+This project is licensed under the MIT License.

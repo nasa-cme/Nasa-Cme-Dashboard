@@ -1,5 +1,5 @@
 -- ============================================================
--- Migração inicial: criação das tabelas para o pipeline CME
+-- Setup inicial do banco de dados Supabase
 -- Projeto: DONKI-CME-DB (SN-2026-GRUPO-03-NASA)
 -- ============================================================
 

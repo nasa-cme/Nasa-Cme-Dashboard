@@ -35,7 +35,7 @@ jobs:
       - name: Run NASA data fetch pipeline
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           NASA_API_KEY: ${{ secrets.NASA_API_KEY }}
         run: |
           python scripts/fetch_nasa.py

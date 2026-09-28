@@ -12,7 +12,7 @@ Este script:
 
 Variáveis de ambiente necessárias:
   - SUPABASE_URL: URL do projeto Supabase
-  - SUPABASE_KEY: Chave de serviço (service_role) do Supabase
+  - SUPABASE_SERVICE_KEY: Chave de serviço (service_role) do Supabase
   - NASA_API_KEY: Chave da API da NASA (opcional, padrão: DEMO_KEY)
 
 Tabelas esperadas no Supabase:
@@ -68,19 +68,15 @@ def get_env_var(name: str, default: str | None = None, required: bool = False) -
     return value or ""
 
 
-def generate_record_hash(record: dict[str, Any]) -> str:
+def generate_record_hash(activity_id: str | None) -> str:
     """
-    Gera um hash único para um registro CME.
+    Gera um hash único para um registro CME baseado na chave natural (activityID).
     Usado para deduplicação antes do upsert.
     """
-    # Campos que identificam unicamente um evento
-    key_fields = {
-        "activity_id": record.get("activity_id"),
-        "start_time": record.get("start_time"),
-        "source_location": record.get("source_location"),
-    }
-    key_string = json.dumps(key_fields, sort_keys=True, default=str)
-    return hashlib.sha256(key_string.encode()).hexdigest()
+    if not activity_id:
+        # Fallback para registros sem activityID (não deveria acontecer)
+        return hashlib.sha256(f"unknown_{datetime.now(timezone.utc).isoformat()}".encode()).hexdigest()
+    return hashlib.sha256(activity_id.encode()).hexdigest()
 
 
 def pick_best_analysis(analyses: list[dict] | None) -> dict | None:
@@ -107,13 +103,14 @@ def normalize_event(raw: dict) -> dict:
     Normaliza um registro bruto da API DONKI para o formato do banco.
     """
     analysis = pick_best_analysis(raw.get("cmeAnalyses"))
+    activity_id = raw.get("activityID")
     
     return {
-        "activity_id": raw.get("activityID"),
+        "activity_id": activity_id,
         "start_time": raw.get("startTime"),
         "source_location": raw.get("sourceLocation") or None,
         "note": raw.get("note") or None,
-        "instruments": [i.get("displayName") for i in (raw.get("instruments") or []) if i.get("displayName")],
+        "instruments": [i.get("displayName") for i in (raw.get("instruments") or []) if i and i.get("displayName")],
         "speed": analysis.get("speed") if analysis else None,
         "type": analysis.get("type") if analysis else None,
         "is_earth_directed": is_earth_directed(analysis),
@@ -122,7 +119,7 @@ def normalize_event(raw: dict) -> dict:
         "half_angle": analysis.get("halfAngle") if analysis else None,
         "link": raw.get("link") or None,
         "linked_events": [e.get("activityID") for e in (raw.get("linkedEvents") or []) if e and e.get("activityID")],
-        "record_hash": generate_record_hash(raw),
+        "record_hash": generate_record_hash(activity_id),
         "fetched_at": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -158,19 +155,19 @@ def fetch_nasa_data(
 
 def deduplicate_records(records: list[dict]) -> list[dict]:
     """
-    Remove duplicatas baseado no record_hash.
+    Remove duplicatas baseado na chave natural (activity_id).
     Evita o erro PostgreSQL 21000 (unique_violation) durante o upsert.
     """
-    seen_hashes = set()
+    seen_ids = set()
     unique_records = []
     duplicates_count = 0
 
     for record in records:
-        record_hash = record.get("record_hash")
-        if record_hash in seen_hashes:
+        activity_id = record.get("activity_id")
+        if activity_id in seen_ids:
             duplicates_count += 1
             continue
-        seen_hashes.add(record_hash)
+        seen_ids.add(activity_id)
         unique_records.append(record)
 
     if duplicates_count > 0:
@@ -196,7 +193,7 @@ def upsert_batch(supabase: Client, records: list[dict]) -> int:
 
 
 def register_execution(
-    supabase: Client,
+    supabase: Client | None,
     registros_processados: int,
     lotes: int,
     erros: int,
@@ -205,6 +202,7 @@ def register_execution(
 ) -> None:
     """
     Registra a execução na tabela 'execucoes'.
+    Se supabase for None, apenas loga o erro.
     """
     execution_data = {
         "executed_at": datetime.now(timezone.utc).isoformat(),
@@ -215,12 +213,15 @@ def register_execution(
         "detalhes": detalhes,
     }
 
+    if supabase is None:
+        logger.error(f"Supabase não inicializado. Execução não registrada: {execution_data}")
+        return
+
     try:
         supabase.table("execucoes").insert(execution_data).execute()
         logger.info(f"Execução registrada com status: {status}")
     except Exception as e:
         logger.error(f"Falha ao registrar execução: {e}")
-        # Não falhamos o pipeline inteiro por causa do registro de execução
 
 
 # ---------------------------------------------------------------------------
@@ -237,23 +238,24 @@ def run_pipeline() -> None:
 
     # 1. Configuração
     supabase_url = get_env_var("SUPABASE_URL", required=True)
-    supabase_key = get_env_var("SUPABASE_KEY", required=True)
+    supabase_key = get_env_var("SUPABASE_SERVICE_KEY", required=True)
     nasa_api_key = get_env_var("NASA_API_KEY", default="DEMO_KEY")
 
     # 2. Inicializar cliente Supabase
+    supabase: Client | None = None
     try:
-        supabase: Client = create_client(supabase_url, supabase_key)
+        supabase = create_client(supabase_url, supabase_key)
         logger.info("Cliente Supabase inicializado com sucesso.")
     except Exception as e:
         logger.error(f"Falha ao inicializar cliente Supabase: {e}")
-        register_execution(supabase, 0, 0, 1, STATUS_ERRO_CRITICO, str(e))
+        register_execution(None, 0, 0, 1, STATUS_ERRO_CRITICO, str(e))
         sys.exit(1)
 
     # 3. Definir período de busca (últimos 30 dias por padrão)
-    end_date = datetime.now(timezone.utc).date()
-    start_date = end_date - timedelta(days=30)
-    start_str = start_date.isoformat()
-    end_str = end_date.isoformat()
+    end_date = datetime.now(timezone.utc).date();
+    start_date = end_date - timedelta(days=30);
+    start_str = start_date.isoformat();
+    end_str = end_date.isoformat();
 
     logger.info(f"Período de busca: {start_str} a {end_str}")
 
@@ -265,22 +267,23 @@ def run_pipeline() -> None:
         register_execution(supabase, 0, 0, 1, STATUS_ERRO_CRITICO, str(e))
         sys.exit(1)
 
+    # 5. Tratar resposta vazia como execução válida
     if not raw_data:
-        logger.info("Nenhum dado retornado pela API. Registrando execução.")
+        logger.info("Nenhum dado retornado pela API. Registrando execução como válida.")
         register_execution(supabase, 0, 0, 0, STATUS_CONCLUIDO, "Nenhum dado no período")
-        return
+        sys.exit(0)
 
-    # 5. Normalizar dados
+    # 6. Normalizar dados
     logger.info("Normalizando registros...")
     normalized_records = [normalize_event(raw) for raw in raw_data]
     logger.info(f"{len(normalized_records)} registros normalizados.")
 
-    # 6. Deduplicação
+    # 7. Deduplicação
     logger.info("Realizando deduplicação...")
     unique_records = deduplicate_records(normalized_records)
     logger.info(f"{len(unique_records)} registros únicos após deduplicação.")
 
-    # 7. Upsert em lotes
+    # 8. Upsert em lotes
     logger.info(f"Enviando dados ao Supabase em lotes de {BATCH_SIZE}...")
     total_processed = 0
     total_batches = 0
@@ -302,7 +305,7 @@ def run_pipeline() -> None:
             error_messages.append(error_msg)
             logger.error(f"Erro no lote {batch_num}: {e}")
 
-    # 8. Determinar status final
+    # 9. Determinar status final
     if total_errors == 0:
         status = STATUS_CONCLUIDO
         detalhes = None
@@ -313,7 +316,7 @@ def run_pipeline() -> None:
         status = STATUS_ERRO_CRITICO
         detalhes = "; ".join(error_messages)
 
-    # 9. Registrar execução
+    # 10. Registrar execução
     register_execution(
         supabase,
         registros_processados=total_processed,
@@ -323,7 +326,7 @@ def run_pipeline() -> None:
         detalhes=detalhes,
     )
 
-    # 10. Resultado final
+    # 11. Resultado final
     logger.info("=" * 60)
     logger.info(f"Pipeline concluído com status: {status}")
     logger.info(f"  - Registros processados: {total_processed}")
@@ -331,7 +334,7 @@ def run_pipeline() -> None:
     logger.info(f"  - Erros: {total_errors}")
     logger.info("=" * 60)
 
-    # 11. Exit code para o GitHub Actions
+    # 12. Exit code para o GitHub Actions
     if status == STATUS_ERRO_CRITICO:
         logger.error("Pipeline falhou criticamente. Encerrando com exit code 1.")
         sys.exit(1)

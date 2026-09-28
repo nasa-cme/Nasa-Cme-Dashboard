@@ -1,18 +1,23 @@
 /* ==========================================================================
    CME WATCH — script.js
    Fetches, analyzes and renders Coronal Mass Ejection data from
-   NASA's DONKI API (https://api.nasa.gov/DONKI/CME)
+   Supabase REST API (populated by GitHub Actions pipeline)
    ========================================================================== */
 
 (() => {
   'use strict';
 
-  const API_BASE = 'https://api.nasa.gov/DONKI/CME';
+  /* ------------------------------------------------------------------ */
+  /* Configuração do Supabase (apenas chave pública anon)                */
+  /* ------------------------------------------------------------------ */
+  const SUPABASE_URL = 'https://SEU_PROJETO.supabase.co';
+  const SUPABASE_ANON_KEY = 'SUA_CHAVE_ANON_PUBLICA';
+
+  const SUPABASE_ENDPOINT = `${SUPABASE_URL}/rest/v1`;
 
   const els = {
     startDate: document.getElementById('startDate'),
     endDate: document.getElementById('endDate'),
-    apiKey: document.getElementById('apiKey'),
     fetchBtn: document.getElementById('fetchBtn'),
     statusLed: document.getElementById('statusLed'),
     statusText: document.getElementById('statusText'),
@@ -31,6 +36,7 @@
     modalTitle: document.getElementById('modalTitle'),
     modalBadge: document.getElementById('modalBadge'),
     modalBody: document.getElementById('modalBody'),
+    lastUpdateText: document.getElementById('lastUpdateText'),
   };
 
   let currentEvents = [];
@@ -93,16 +99,15 @@
   }
 
   /* ------------------------------------------------------------------ */
-  /* Fetch                                                               */
+  /* Fetch from Supabase                                                 */
   /* ------------------------------------------------------------------ */
 
   async function fetchCMEData() {
     const start = els.startDate.value;
     const end = els.endDate.value;
-    const key = els.apiKey.value.trim() || 'DEMO_KEY';
 
     if (!start || !end) {
-      showAlert('Selecione uma data inicial e final antes de executar o scan.');
+      showAlert('Selecione uma data inicial e final antes de executar.');
       return;
     }
     if (new Date(start) > new Date(end)) {
@@ -111,19 +116,25 @@
     }
 
     hideAlert();
-    setStatus('loading', 'SCANNING...');
+    setStatus('loading', 'CARREGANDO...');
     els.fetchBtn.disabled = true;
 
-    const url = `${API_BASE}?startDate=${start}&endDate=${end}&api_key=${encodeURIComponent(key)}`;
+    // Formatar datas para ISO 8601 com hora
+    const startISO = `${start}T00:00:00`;
+    const endISO = `${end}T23:59:59`;
+
+    const url = `${SUPABASE_ENDPOINT}/cme_events?start_time=gte.${encodeURIComponent(startISO)}&start_time=lte.${encodeURIComponent(endISO)}&order=start_time.desc&limit=1000`;
 
     try {
-      const res = await fetch(url);
+      const res = await fetch(url, {
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+      });
 
       if (!res.ok) {
-        if (res.status === 429) {
-          throw new Error('Limite de requisições da API excedido (rate limit). Tente novamente mais tarde ou use sua própria API key.');
-        }
-        throw new Error(`Falha na requisição à API DONKI (HTTP ${res.status}).`);
+        throw new Error(`Falha na requisição ao Supabase (HTTP ${res.status}).`);
       }
 
       const data = await res.json();
@@ -139,50 +150,36 @@
 
       currentEvents = data.map(normalizeEvent);
       renderAll();
-      setStatus('live', `${currentEvents.length} EVENT(S) LOCKED`);
+      setStatus('live', `${currentEvents.length} EVENT(S) LOADED`);
     } catch (err) {
       console.error(err);
-      setStatus('error', 'SCAN FAILED');
-      showAlert(err.message || 'Erro desconhecido ao buscar dados da NASA DONKI API.');
+      setStatus('error', 'LOAD FAILED');
+      showAlert(err.message || 'Erro desconhecido ao buscar dados do Supabase.');
     } finally {
       els.fetchBtn.disabled = false;
     }
   }
 
   /* ------------------------------------------------------------------ */
-  /* Normalize raw DONKI record into something easy to render            */
+  /* Normalize Supabase record for rendering                             */
   /* ------------------------------------------------------------------ */
 
-  function normalizeEvent(raw) {
-    const analysis = pickBestAnalysis(raw.cmeAnalyses);
+  function normalizeEvent(record) {
     return {
-      id: raw.activityID,
-      startTime: raw.startTime,
-      sourceLocation: raw.sourceLocation || '—',
-      note: raw.note || '',
-      instruments: (raw.instruments || []).map(i => i.displayName),
-      speed: analysis ? analysis.speed : null,
-      type: analysis ? analysis.type : null,
-      isEarthDirected: analysis ? !!analysis.isMostAccurate && isEarthDirected(analysis) : false,
-      latitude: analysis ? analysis.latitude : null,
-      longitude: analysis ? analysis.longitude : null,
-      halfAngle: analysis ? analysis.halfAngle : null,
-      link: raw.link || null,
-      linkedEvents: (raw.linkedEvents || []).map(e => e.activityID),
-      raw,
+      id: record.activity_id,
+      startTime: record.start_time,
+      sourceLocation: record.source_location || '—',
+      note: record.note || '',
+      instruments: Array.isArray(record.instruments) ? record.instruments : [],
+      speed: record.speed,
+      type: record.type,
+      isEarthDirected: record.is_earth_directed,
+      latitude: record.latitude,
+      longitude: record.longitude,
+      halfAngle: record.half_angle,
+      link: record.link || null,
+      linkedEvents: Array.isArray(record.linked_events) ? record.linked_events : [],
     };
-  }
-
-  function pickBestAnalysis(analyses) {
-    if (!analyses || analyses.length === 0) return null;
-    const mostAccurate = analyses.find(a => a.isMostAccurate);
-    return mostAccurate || analyses[analyses.length - 1];
-  }
-
-  function isEarthDirected(analysis) {
-    // Rough heuristic: near-zero lat/long half-angle cones tend to be geoeffective.
-    if (analysis.latitude == null || analysis.longitude == null) return false;
-    return Math.abs(analysis.latitude) < 30 && Math.abs(analysis.longitude) < 30;
   }
 
   /* ------------------------------------------------------------------ */
@@ -200,10 +197,10 @@
       : null;
     const earthDirected = currentEvents.filter(e => e.isEarthDirected).length;
 
-    els.statTotal.innerHTML = total || '—';
-    els.statAvgSpeed.innerHTML = avgSpeed != null ? `${avgSpeed}<small>km/s</small>` : '—';
-    els.statMaxSpeed.innerHTML = maxSpeed != null ? `${maxSpeed}<small>km/s</small>` : '—';
-    els.statEarthDirected.innerHTML = total ? `${earthDirected}/${total}` : '—';
+    els.statTotal.textContent = total || '—';
+    els.statAvgSpeed.innerHTML = avgSpeed != null ? `${escapeHtml(String(avgSpeed))}<small>km/s</small>` : '—';
+    els.statMaxSpeed.innerHTML = maxSpeed != null ? `${escapeHtml(String(maxSpeed))}<small>km/s</small>` : '—';
+    els.statEarthDirected.textContent = total ? `${earthDirected}/${total}` : '—';
   }
 
   /* ------------------------------------------------------------------ */
@@ -228,7 +225,7 @@
       els.eventList.innerHTML = `
         <div class="empty-state">
           <div class="empty-state__icon">◌</div>
-          <p>Nenhum dado carregado ainda.<br>Selecione um intervalo e clique em EXECUTAR SCAN.</p>
+          <p>Nenhum dado carregado ainda.<br>Selecione um intervalo e clique em ATUALIZAR DADOS.</p>
         </div>`;
       return;
     }
@@ -237,14 +234,14 @@
       const fast = e.speed && e.speed >= 1000;
       const dateStr = formatDateTime(e.startTime);
       return `
-        <div class="event-card ${fast ? 'event-card--fast' : ''}" data-id="${e.id}" style="animation-delay:${Math.min(i, 12) * 0.03}s">
+        <div class="event-card ${fast ? 'event-card--fast' : ''}" data-id="${escapeHtml(e.id)}" style="animation-delay:${Math.min(i, 12) * 0.03}s">
           <div class="event-card__row">
             <span class="event-card__date">${dateStr}</span>
-            <span class="event-card__speed">${e.speed != null ? e.speed + ' km/s' : 'N/D'}</span>
+            <span class="event-card__speed">${e.speed != null ? escapeHtml(String(e.speed)) + ' km/s' : 'N/D'}</span>
           </div>
           <div class="event-card__meta">
-            <span>${e.sourceLocation}</span>
-            ${e.type ? `<span>${e.type}</span>` : ''}
+            <span>${escapeHtml(e.sourceLocation)}</span>
+            ${e.type ? `<span>${escapeHtml(e.type)}</span>` : ''}
             ${e.isEarthDirected ? '<span>EARTH-DIRECTED</span>' : ''}
           </div>
         </div>`;
@@ -277,6 +274,16 @@
   /* Modal                                                               */
   /* ------------------------------------------------------------------ */
 
+  function isValidUrl(url) {
+    if (!url) return false;
+    try {
+      const parsed = new URL(url);
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  }
+
   function openModal(id) {
     const e = currentEvents.find(ev => ev.id === id);
     if (!e) return;
@@ -284,19 +291,22 @@
     els.modalBadge.textContent = e.type || 'CME';
     els.modalTitle.textContent = e.id;
 
+    const instrumentsText = e.instruments.length ? e.instruments.map(i => escapeHtml(i)).join(', ') : '—';
+    const linkedEventsText = e.linkedEvents.length ? e.linkedEvents.map(i => escapeHtml(i)).join(', ') : '—';
+
     els.modalBody.innerHTML = `
       <dl>
         <dt>INÍCIO</dt><dd>${formatDateTime(e.startTime)}</dd>
-        <dt>ORIGEM SOLAR</dt><dd>${e.sourceLocation}</dd>
-        <dt>VELOCIDADE</dt><dd>${e.speed != null ? e.speed + ' km/s' : 'Não modelado'}</dd>
-        <dt>TIPO</dt><dd>${e.type || '—'}</dd>
-        <dt>LATITUDE</dt><dd>${e.latitude != null ? e.latitude + '°' : '—'}</dd>
-        <dt>LONGITUDE</dt><dd>${e.longitude != null ? e.longitude + '°' : '—'}</dd>
-        <dt>MEIO-ÂNGULO</dt><dd>${e.halfAngle != null ? e.halfAngle + '°' : '—'}</dd>
-        <dt>INSTRUMENTOS</dt><dd>${e.instruments.length ? e.instruments.join(', ') : '—'}</dd>
+        <dt>ORIGEM SOLAR</dt><dd>${escapeHtml(e.sourceLocation)}</dd>
+        <dt>VELOCIDADE</dt><dd>${e.speed != null ? escapeHtml(String(e.speed)) + ' km/s' : 'Não modelado'}</dd>
+        <dt>TIPO</dt><dd>${e.type ? escapeHtml(e.type) : '—'}</dd>
+        <dt>LATITUDE</dt><dd>${e.latitude != null ? escapeHtml(String(e.latitude)) + '°' : '—'}</dd>
+        <dt>LONGITUDE</dt><dd>${e.longitude != null ? escapeHtml(String(e.longitude)) + '°' : '—'}</dd>
+        <dt>MEIO-ÂNGULO</dt><dd>${e.halfAngle != null ? escapeHtml(String(e.halfAngle)) + '°' : '—'}</dd>
+        <dt>INSTRUMENTOS</dt><dd>${instrumentsText}</dd>
         <dt>EARTH-DIRECTED</dt><dd>${e.isEarthDirected ? 'SIM' : 'NÃO / INDETERMINADO'}</dd>
-        <dt>EVENTOS LIGADOS</dt><dd>${e.linkedEvents.length ? e.linkedEvents.join(', ') : '—'}</dd>
-        ${e.link ? `<dt>FONTE</dt><dd><a href="${e.link}" target="_blank" rel="noopener">Ver no DONKI →</a></dd>` : ''}
+        <dt>EVENTOS LIGADOS</dt><dd>${linkedEventsText}</dd>
+        ${isValidUrl(e.link) ? `<dt>FONTE</dt><dd><a href="${escapeHtml(e.link)}" target="_blank" rel="noopener">Ver no DONKI →</a></dd>` : ''}
       </dl>
       ${e.note ? `<div class="modal__note">${escapeHtml(e.note)}</div>` : ''}
     `;
@@ -311,8 +321,9 @@
   }
 
   function escapeHtml(str) {
+    if (str == null) return '';
     const div = document.createElement('div');
-    div.textContent = str;
+    div.textContent = String(str);
     return div.innerHTML;
   }
 
@@ -354,7 +365,7 @@
     const w = cssWidth - padding.left - padding.right;
     const h = cssHeight - padding.top - padding.bottom;
 
-    const speeds = points.map(p => p.speed);
+    const speeds = points.map(p => Number(p.speed));
     const minSpeed = 0;
     const maxSpeed = Math.max(...speeds) * 1.1;
 
@@ -374,7 +385,7 @@
       ctx.moveTo(padding.left, y);
       ctx.lineTo(padding.left + w, y);
       ctx.stroke();
-      ctx.fillText(Math.round(v), 6, y + 3);
+      ctx.fillText(Math.round(v).toString(), 6, y + 3);
     }
 
     // danger threshold line at 1000 km/s if in range
@@ -392,7 +403,7 @@
     // area fill
     ctx.beginPath();
     ctx.moveTo(xFor(0), yFor(0));
-    points.forEach((p, i) => ctx.lineTo(xFor(i), yFor(p.speed)));
+    points.forEach((p, i) => ctx.lineTo(xFor(i), yFor(Number(p.speed))));
     ctx.lineTo(xFor(points.length - 1), yFor(0));
     ctx.closePath();
     const grad = ctx.createLinearGradient(0, padding.top, 0, padding.top + h);
@@ -404,7 +415,7 @@
     // line
     ctx.beginPath();
     points.forEach((p, i) => {
-      const x = xFor(i), y = yFor(p.speed);
+      const x = xFor(i), y = yFor(Number(p.speed));
       if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     });
     ctx.strokeStyle = '#3dff7a';
@@ -416,8 +427,8 @@
 
     // points
     points.forEach((p, i) => {
-      const x = xFor(i), y = yFor(p.speed);
-      const fast = p.speed >= 1000;
+      const x = xFor(i), y = yFor(Number(p.speed));
+      const fast = Number(p.speed) >= 1000;
       ctx.beginPath();
       ctx.arc(x, y, fast ? 4 : 3, 0, Math.PI * 2);
       ctx.fillStyle = fast ? '#ff4d5e' : '#3dff7a';
@@ -428,6 +439,36 @@
   window.addEventListener('resize', () => {
     if (currentEvents.length) renderChart();
   });
+
+  /* ------------------------------------------------------------------ */
+  /* Fetch last pipeline execution info                                  */
+  /* ------------------------------------------------------------------ */
+
+  async function fetchLastUpdate() {
+    try {
+      const url = `${SUPABASE_ENDPOINT}/execucoes?order=executed_at.desc&limit=1`;
+      const res = await fetch(url, {
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+      });
+
+      if (!res.ok) return;
+
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        const lastExec = data[0];
+        const date = new Date(lastExec.executed_at);
+        els.lastUpdateText.textContent = date.toLocaleString('pt-BR', {
+          day: '2-digit', month: '2-digit', year: 'numeric',
+          hour: '2-digit', minute: '2-digit', hour12: false,
+        });
+      }
+    } catch (err) {
+      console.error('Erro ao buscar última atualização:', err);
+    }
+  }
 
   /* ------------------------------------------------------------------ */
   /* Render orchestration                                                */
@@ -445,7 +486,8 @@
 
   els.fetchBtn.addEventListener('click', fetchCMEData);
 
-  // Auto-run an initial scan with DEMO_KEY on load for immediate feedback
+  // Auto-run on load
   fetchCMEData();
+  fetchLastUpdate();
 
 })();

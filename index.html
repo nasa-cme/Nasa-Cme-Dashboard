@@ -1,13 +1,13 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CME WATCH // NASA DONKI Space Weather Dashboard</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Michroma&family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CME WATCH // NASA DONKI Space Weather Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Michroma&family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
@@ -41,13 +41,9 @@
       <label for="endDate">RANGE END</label>
       <input type="date" id="endDate">
     </div>
-    <div class="field field--key">
-      <label for="apiKey">NASA API KEY <span class="opt">(opcional — usa DEMO_KEY)</span></label>
-      <input type="text" id="apiKey" placeholder="DEMO_KEY">
-    </div>
     <div class="field field--action">
       <button id="fetchBtn" class="btn-fetch">
-        <span class="btn-fetch__label">EXECUTAR SCAN</span>
+        <span class="btn-fetch__label">ATUALIZAR DADOS</span>
         <span class="btn-fetch__arrow">›</span>
       </button>
     </div>
@@ -92,7 +88,7 @@
       </div>
       <div class="panel__body">
         <canvas id="speedChart" width="900" height="280"></canvas>
-        <div class="chart-empty" id="chartEmpty">Execute um scan para visualizar os dados</div>
+        <div class="chart-empty" id="chartEmpty">Clique em ATUALIZAR DADOS para carregar</div>
       </div>
     </section>
 
@@ -108,15 +104,20 @@
       <div class="panel__body event-list" id="eventList">
         <div class="empty-state">
           <div class="empty-state__icon">◌</div>
-          <p>Nenhum dado carregado ainda.<br>Selecione um intervalo e clique em EXECUTAR SCAN.</p>
+          <p>Nenhum dado carregado ainda.<br>Selecione um intervalo e clique em ATUALIZAR DADOS.</p>
         </div>
       </div>
     </section>
 
   </main>
 
+  <!-- LAST UPDATE INFO -->
+  <div class="last-update" id="lastUpdate">
+    <span>Última atualização do pipeline: <strong id="lastUpdateText">—</strong></span>
+  </div>
+
   <footer class="footer">
-    <p>Fonte de dados: NASA DONKI API (Database Of Notifications, Knowledge, Information) — <span>api.nasa.gov</span></p>
+    <p>Fonte de dados: NASA DONKI API via Supabase — <span>api.nasa.gov</span></p>
   </footer>
 
 </div>
